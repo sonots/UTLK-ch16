@@ -1,5 +1,5 @@
 % header  
-author: 
+author:
 title: 詳解 Linux カーネル輪読会 第16章 <br /><br /><br /><br /><small>Naotoshi Seo</small>
 cover: cover.jpg
 
@@ -15,17 +15,17 @@ cover: cover.jpg
 * 5種のモード
 1. 標準モード
   * O_SYNC と O_DIRECT フラグを立てない
-  * read(): データがユーザアドレス空間に読み込まれるまでプロセスの実行を中断する
-  * write(): データがページにキャッシュに書き込まれるとすぐに終了しプロセスの実行が再開される
+  * read: データがユーザアドレス空間に読み込まれるまでプロセスの実行を中断する
+  * write: ページキャッシュに書き込まれるとすぐに終了しプロセスの実行が再開される
 2. 同期モード (O_SYNC)
-  * write(): データのディスクへの書き込みが完了するまでプロセスの実行を中断する
+  * write: ディスクへの書き込みが完了するまでプロセスの実行を中断する
 
 # ファイルアクセスモード(2)
 
 3. ダイレクトI/Oモード (O_DIRECT)
   * read/write はページキャッシュを使わずに、ユーザアドレス空間とディスクの間で直接データを転送する
 4. メモリマッピングモード
-  * ファイルをオープンしたと、アプリケーションは mmap() システムコールを発行紙、ファイルをメモリにマッピング
+  * ファイルをオープンした後、mmap() システムコールを発行し、ファイルをメモリにマッピング
   * アプリケーションは read(), write(), lseek() を使わずに、直接メモリのバイト列にアクセスして操作する
 5. 非同期モード
   * ファイルに非同期 I/O でアクセスする
@@ -51,12 +51,11 @@ cover: cover.jpg
 
 # 16.1.1 ファイルの読み取り
 
-generic_file_read
-
-* VFSのレイヤから呼び出されファイルを読み込む。
-* ext2,ext3などのほとんどのファイルシステムで使用される。(NFSでは使用されない)
-* ページキャッシュを介して読み込みを行う
-* ページキャッシュがなかった場合は、各ファイルシステムのreadルーチンを呼び出して読み込みを行う
+* generic_file_read
+  * VFSのレイヤから呼び出されファイルを読み込む。
+  * ext2,ext3などのほとんどのファイルシステムで使用される。(NFSでは使用されない)
+  * ページキャッシュを介して読み込みを行う
+  * ページキャッシュがなかった場合は、各ファイルシステムのreadルーチンを呼び出して読み込みを行う
 
 cf. http://wiki.bit-hive.com/linuxkernelmemo/pg/generic_file_read()
 
@@ -99,7 +98,7 @@ int blkdev_readpage(struct file * file, struct * page page) {
 # 16.1.2 ファイルの先読み(1)
 
 * 先読みとは、いくつかの隣接したページを、それらが必要とされる前に読み込むこと
-* ほとんどの場合、先読みによてディスク性能が向上する
+* ほとんどの場合、先読みによってディスク性能が向上する
   * ディスクコントローラが少ないコマンドの実行でまとめてディスクを参照できるため
 * 反面、ランダムアクセスするアプリには適していない
 
@@ -111,7 +110,7 @@ int blkdev_readpage(struct file * file, struct * page page) {
 
 # 16.1.2 ファイルの先読み(3-1)
 
-* カレントウィンドウ、先読みウィンドウ、２つのページ群を利用する。
+* カレントウィンドウ、先読みウィンドウ、２つのページ群を利用
 * **カレントウィンドウ:** プロセスが要求したページと、カーネルが先読みしてページキャッシュに入れたページから構成される。プロセスがアクセスした最後のページに加え、まだプロセスが要求していないページが含まれていることがある。
 * **先読みウィンドウ:** カレントウィンドウに続くページ群からなる。カーネルが現在まさに先読み処理を行っているページ群。まだ１度もプロセスが要求していない。
 
@@ -130,7 +129,7 @@ int blkdev_readpage(struct file * file, struct * page page) {
 # 16.1.2 ファイルの先読み(4-2)
 
 * アプリが POSIX_FADV_NOREUSE か POSIX_FADV_WILLNEED コマンドを指定して posix_fadvise() システムコールを発行した時。指定したファイルページ範囲に近々アクセスする予定であることをカーネルに知らせている。
-* アプリが MADV_WILLNEAD を指定して madvise() システムコールを実行したとき。メモリにマッピングされた領域にある指定したファイルページ範囲に近々アクセスすることおwカーネルに知らせている
+* アプリが MADV_WILLNEAD を指定して madvise() システムコールを実行したとき。メモリにマッピングされた領域にある指定したファイルページ範囲に近々アクセスすることをカーネルに知らせている
 
 # 16.1.2.1 page_cache_readachead(1)
 
@@ -177,10 +176,12 @@ int blkdev_readpage(struct file * file, struct * page page) {
 
 # 16.1.3 ファイルへの書き込み(1)
 
-* write() システムコールの仕事
+* write() システムコールの主な仕事
   * 呼び出しプロセスのユーザアドレス空間からカーネルデータ構造へデータを移動すること
   * そのあとにディスクへデータを移動すること
-* 書き込み操作対象のディスクブロックを特定し、ユーザモードアドレス空間からページキャッシュにあるいくつかのページへデータを読み込み、そのあと、それらのページのバッファに汚れたことを示す印をつける
+* write() は、
+  * 書き込み操作対象のディスクブロックを特定し、ユーザモードアドレス空間からページキャッシュにあるいくつかのページへデータを読み込む
+  * そのあと、それらのページのバッファに汚れたことを示す印をつける
 
 # 16.1.3 ファイルへの書き込み(2)
 
@@ -194,13 +195,13 @@ int blkdev_readpage(struct file * file, struct * page page) {
 ```
 generic_file_write(ファイル構造体、ユーザ領域, ファイルポインタ)
   if(アペンドモードなら) ファイルポインタをファイルエンドにする
-    while(書き込むデータがある間)
-      ページキャッシュを確保する(__grab_cache_page関数)
-        (もしキャッシュ上になければ新規確保し、登録する)
-      ページの書き込み準備をする(iノードのprepare_writeオペレーション)
-      ユーザ領域のデータをバッファに読み込む(copy_from_user関数)
-      ページの書き込み要求を出す(iノードのcommit_writeオペレーション)
-      ページキャッシュの解放(page_cache_release関数)
+  while(書き込むデータがある間)
+    ページキャッシュを確保する(__grab_cache_page関数)
+      (もしキャッシュ上になければ新規確保し、登録する)
+    ページの書き込み準備をする(iノードのprepare_writeオペレーション)
+    ユーザ領域のデータをバッファに読み込む(copy_from_user関数)
+    ページの書き込み要求を出す(iノードのcommit_writeオペレーション)
+    ページキャッシュの解放(page_cache_release関数)
 ```
 
 cf. https://osdn.jp/projects/linux-kernel-docs/wiki/internal24-138-%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E3%81%B8%E3%81%AE%E6%9B%B8%E3%81%8D%E8%BE%BC%E3%81%BF%E3%81%A8%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E6%8B%A1%E5%BC%B5
@@ -229,6 +230,8 @@ int blkdev_prepare_write(struct file *file,
 # (閑話休題) RubyのLoggerはプロセスセーフなのか
 
 <a href="http://blog.livedoor.jp/sonots/archives/32645828.html">RubyのLoggerはスレッドセーフ(＆プロセスセーフ)かどうか調べてみた - sonots:blog</a>
+
+* write はロックを取るので混ざらない
 
 # 16.1.4 汚れたページのディスクへの書き込み(1)
 
@@ -349,17 +352,16 @@ int msync(void *addr, size_t length, int flags) ファイルに書き込ませ�
 * https://issues.apache.org/jira/browse/HDFS-4953
   * > We would like to enable HDFS to read local files via mmap. This would enable truly zero-copy reads.
 * [Zero Copy I: User-Mode Perspective - LinuxJournal](http://www.linuxjournal.com/article/6345)
-  * See Figure 2. 
+  * See Figure 2.
 
 # (閑話休題) mmap の話
 
 * [mmapのほうがreadより速いという迷信について - kazuho](http://d.hatena.ne.jp/kazuhooku/20131010/1381403041)
-* シーケンシャルアクセスを行うケースにおいては read(2) のほうが速い <= readahead がきくから？
+* シーケンシャルアクセスを行うケースにおいては read(2) のほうが速い <= readahead がきくから
 
 # 16.3 ダイレクトI/O転送
 
 * キャッシュ機能を自分で持つデータベースのようなアプリケーションの場合、カーネルのページキャッシュは使いたくないのでダイレクトI/O転送を使うと良い
-* ブロック型ハードハードウェアデバイスの場合は、割り込みとDMAを使って操作する必要があり、それらはカーネルモードでのみ実行可能 => カーネル側になんらかの対応が必要 => ダイレクトI/O
 
 # 16.4 非同期I/O
 
@@ -367,6 +369,14 @@ int msync(void *addr, size_t length, int flags) ファイルに書き込ませ�
 * aio_read, aio_write, aio_fsync, aio_cancel, aio_suspend
 * aio_error: 処理中なら EINPROGRESS を返す。成功したら0、失敗していればエラー番号を返す
 * aio_return: 非同期I/Oが終了すると読み書きしたバイト数を返す。失敗していたら-1
+
+# (追加) aio と nonblock
+
+* aio_read と O_NONBLOCK は違う
+* aio_read をつかうと buffer が kernel space にコピーされるのを待たなくて良い
+* O_NONBLOCK で open した fd を read した場合は、データが到着して読み込みを行うとブロックする
+* aio の場合は、callback が呼ばれる。O_NONBLOCK の場合は callback 登録できないので無限ループさせる。ビジーループになりやすい
+* aio のほうが明らかに良さそうに見えるが、[非同期入出力の残念な現状 - 本の虫](http://cpplover.blogspot.jp/2012/10/blog-post_28.html) とのこと
 
 # まとめ
 
